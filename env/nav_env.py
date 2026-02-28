@@ -15,7 +15,7 @@ class NavEnv(gym.Env):
         self.observation_space = spaces.Box(
             low=-np.inf,
             high=np.inf,
-            shape=(7,),
+            shape=(5,),
             dtype=np.float32
         )
 
@@ -43,7 +43,17 @@ class NavEnv(gym.Env):
         return self._get_obs(), {}
 
     def _get_obs(self):
-        return np.concatenate([self.state, self.goal]).astype(np.float32)
+        x,y,theta,_,_ = self.state
+        goal_x, goal_y = self.goal
+
+        #World-frame difference
+        dx = goal_x - x
+        dy = goal_y - y
+
+        #Rotate to robot frame
+        dx_robot = np.cos(theta) * dx + np.sin(theta) * dy
+        dy_robot = -np.sin(theta) * dx + np.cos(theta) * dy
+        return np.array([x, y, theta, dx_robot, dy_robot], dtype=np.float32)
 
     def step(self, action):
         x, y, theta, v, omega = self.state
