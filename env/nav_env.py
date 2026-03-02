@@ -1,6 +1,10 @@
+from ctypes import alignment
+
 import gymnasium as gym
 from gymnasium import spaces
 import numpy as np
+from gymnasium.envs.registration import register
+
 
 
 class NavEnv(gym.Env):
@@ -64,21 +68,44 @@ class NavEnv(gym.Env):
         # Differential drive kinematics
         x += v_cmd * np.cos(theta) * dt
         y += v_cmd * np.sin(theta) * dt
-        theta += omega_cmd * dt
+        theta += omega_cmd * dt * 4.0
 
         self.state = np.array([x, y, theta, v_cmd, omega_cmd], dtype=np.float32)
         self.current_step += 1
 
-        # Distance reward
+        # Reward
+        goal_x, goal_y = self.goal
+        dx = goal_x - x
+        dy = goal_y - y
         dist = np.linalg.norm(self.goal - self.state[:2])
-        reward = -dist
 
-        terminated = dist < 0.2
+        dx_robot = np.cos(theta) * dx + np.sin(theta) * dy
+        dy_robot = -np.sin(theta) * dx + np.cos(theta) * dy
+        theta_error = np.arctan2(dy_robot, dx_robot)
+        alignment = np.cos(theta_error)
+
+        reward = -dist + 0.3 * alignment
+        # alignment = dx_robot / (dist + 1e-8)
+        # reward = -dist + 0.5 * alignment
+        # reward = -dist
+
+        success = dist < 0.5
+        terminated = success
+        # if success:
+        #     reward += 20.0
         truncated = self.current_step >= self.max_steps
 
         # Out of bounds penalty
         if np.abs(x) > self.world_size or np.abs(y) > self.world_size:
             reward -= 10.0
             terminated = True
+        info = {}
+        if terminated:
+            info["success"] = success
 
-        return self._get_obs(), reward, terminated, truncated, {}
+        return self._get_obs(), reward, terminated, truncated, info
+    
+    register(
+    id="NavEnv-v0",
+    entry_point="env.nav_env:NavEnv",
+)
