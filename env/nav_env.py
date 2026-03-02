@@ -1,0 +1,109 @@
+import gymnasium as gym
+from gymnasium import spaces
+import numpy as np
+from gymnasium.envs.registration import register
+
+
+
+class NavEnv(gym.Env):
+    def __init__(self):
+        super().__init__()
+
+        self.world_size = 5.0
+        self.max_steps = 400
+        self.current_step = 0
+
+        # Observation: [x, y, theta, v, omega, goal_x, goal_y]
+        self.observation_space = spaces.Box(
+            low=-np.inf,
+            high=np.inf,
+            shape=(5,),
+            dtype=np.float32
+        )
+
+        # Action: [v, omega]
+        self.action_space = spaces.Box(
+            low=np.array([-1.0, -1.0]),
+            high=np.array([1.0, 1.0]),
+            dtype=np.float32
+        )
+
+        self.state = None
+        self.goal = None
+
+    def reset(self, seed=None, options=None):
+        super().reset(seed=seed)
+
+        x = np.random.uniform(-4, 4)
+        y = np.random.uniform(-4, 4)
+        theta = np.random.uniform(-np.pi, np.pi)
+
+        self.state = np.array([x, y, theta, 0.0, 0.0], dtype=np.float32)
+        self.goal = np.random.uniform(-4, 4, size=(2,))
+        self.current_step = 0
+
+        return self._get_obs(), {}
+
+    def _get_obs(self):
+        x,y,theta,_,_ = self.state
+        goal_x, goal_y = self.goal
+
+        #World-frame difference
+        dx = goal_x - x
+        dy = goal_y - y
+
+        #Rotate to robot frame
+        dx_robot = np.cos(theta) * dx + np.sin(theta) * dy
+        dy_robot = -np.sin(theta) * dx + np.cos(theta) * dy
+        return np.array([x, y, theta, dx_robot, dy_robot], dtype=np.float32)
+
+    def step(self, action):
+        x, y, theta, v, omega = self.state
+        v_cmd, omega_cmd = action
+
+        dt = 0.05
+
+        # Differential drive kinematics
+        x += v_cmd * np.cos(theta) * dt
+        y += v_cmd * np.sin(theta) * dt
+        theta += omega_cmd * dt * 4.0
+
+        self.state = np.array([x, y, theta, v_cmd, omega_cmd], dtype=np.float32)
+        self.current_step += 1
+
+        # Reward
+        goal_x, goal_y = self.goal
+        dx = goal_x - x
+        dy = goal_y - y
+        dist = np.linalg.norm(self.goal - self.state[:2])
+
+        dx_robot = np.cos(theta) * dx + np.sin(theta) * dy
+        dy_robot = -np.sin(theta) * dx + np.cos(theta) * dy
+        theta_error = np.arctan2(dy_robot, dx_robot)
+        alignment = np.cos(theta_error)
+
+        reward = -dist + 0.3 * alignment
+        # alignment = dx_robot / (dist + 1e-8)
+        # reward = -dist + 0.5 * alignment
+        # reward = -dist
+
+        success = dist < 0.5
+        terminated = success
+        # if success:
+        #     reward += 20.0
+        truncated = self.current_step >= self.max_steps
+
+        # Out of bounds penalty
+        if np.abs(x) > self.world_size or np.abs(y) > self.world_size:
+            reward -= 10.0
+            terminated = True
+        info = {}
+        if terminated:
+            info["success"] = success
+
+        return self._get_obs(), reward, terminated, truncated, info
+    
+    register(
+    id="NavEnv-v0",
+    entry_point="env.nav_env:NavEnv",
+)
