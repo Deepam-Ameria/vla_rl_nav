@@ -29,7 +29,7 @@ def main():
         name="ppo_phase1_baseline",
         config={
             "algo": "PPO",
-            "total_timesteps": 300_000
+            "total_timesteps": 500_000
         }
     )
 
@@ -54,7 +54,7 @@ def main():
     )
 
     model.learn(
-        total_timesteps=300_000,
+        total_timesteps=500_000,
         callback=WandbCallback()
     )
 

@@ -3,4 +3,4 @@ __pycache__/
 wandb/
 logs/
 .env
-
+ppo_nav_model.zip
