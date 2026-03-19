@@ -1,8 +1,5 @@
 import argparse
-import sys
-from typing import Any, Dict
-
-import numpy as np
+import env.nav_env
 import gymnasium as gym
 import wandb
 
@@ -45,39 +42,17 @@ class WandbWriter(KVWriter):
     def close(self) -> None:
         pass
 
-
-# ---------------------------------------------------------------------------
-# Episode callback — logs per-episode info (success, target) that SB3 doesn't
-# know about natively. Training metrics (entropy, KL, etc.) come through
-# WandbWriter above; this only adds the env-specific episode signals.
-# ---------------------------------------------------------------------------
-class EpisodeCallback(BaseCallback):
+class WandbCallback(BaseCallback):
     def _on_step(self) -> bool:
         for info in self.locals.get("infos", []):
             if "episode" in info:
                 wandb.log({
-                    "episode/reward":  info["episode"]["r"],
-                    "episode/length":  info["episode"]["l"],
-                    "episode/success": float(info.get("success", 0)),
-                    "timestep":        self.num_timesteps,
-                    **( {"episode/target": info["target"]}
-                        if "target" in info else {} ),
+                    "episode_reward": info["episode"]["r"],
+                    "episode_length": info["episode"]["l"],
+                    "success": float(info.get("success", 0)),
+                    "timestep": self.num_timesteps,
                 })
         return True
-
-
-# ---------------------------------------------------------------------------
-# Training
-# ---------------------------------------------------------------------------
-def make_logger() -> Logger:
-    """Build an SB3 Logger that prints to stdout AND streams to WandB."""
-    return Logger(
-        folder=None,
-        output_formats=[
-            HumanOutputFormat(sys.stdout),
-            WandbWriter(),
-        ],
-    )
 
 
 def main(args):
@@ -85,12 +60,11 @@ def main(args):
         project="vla-rl-nav",
         name=args.run_name,
         config={
-            "algo":             "PPO",
-            "env":              args.env,
-            "total_timesteps":  args.timesteps,
-            "n_envs":           args.n_envs,
-            "device":           args.device,
-        },
+            "algo": "PPO",
+            "total_timesteps": args.timesteps,
+            "n_envs": args.n_envs,
+            "device": args.device,
+        }
     )
 
     def make_env():
@@ -104,15 +78,15 @@ def main(args):
     model = PPO(
         "MlpPolicy",
         env,
-        verbose=0,              # silence SB3's own stdout table; our logger handles it
-        tensorboard_log=None,   # WandbWriter replaces TensorBoard
+        verbose=1,
+        tensorboard_log="./logs/",
         device=args.device,
     )
     model.set_logger(make_logger())
 
     model.learn(
         total_timesteps=args.timesteps,
-        callback=EpisodeCallback(),
+        callback=WandbCallback(),
     )
 
     model.save(args.save_path)
@@ -121,12 +95,10 @@ def main(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--env",       type=str, default="MuJoCoNavEnv-v0",
-                        choices=["NavEnv-v0", "MuJoCoNavEnv-v0"])
     parser.add_argument("--timesteps", type=int, default=500_000)
-    parser.add_argument("--n-envs",    type=int, default=8)
-    parser.add_argument("--device",    type=str, default="cpu")
-    parser.add_argument("--run-name",  type=str, default="ppo_baseline")
-    parser.add_argument("--save-path", type=str, default="models/ppo_mujoco")
+    parser.add_argument("--n-envs", type=int, default=8)
+    parser.add_argument("--device", type=str, default="cpu")
+    parser.add_argument("--run-name", type=str, default="ppo_baseline")
+    parser.add_argument("--save-path", type=str, default="ppo_nav_model")
     args = parser.parse_args()
     main(args)
