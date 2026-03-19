@@ -1,5 +1,8 @@
 import argparse
-import env.nav_env
+import sys
+from typing import Any, Dict
+
+import numpy as np
 import gymnasium as gym
 import wandb
 
@@ -13,23 +16,9 @@ from stable_baselines3.common.vec_env import DummyVecEnv
 from stable_baselines3.common.logger import KVWriter, HumanOutputFormat, Logger
 
 
-# ---------------------------------------------------------------------------
-# WandB logger — plugs directly into SB3's internal logging system.
-#
-# SB3 uses a Logger that holds a list of "output formats" (KVWriter objects).
-# Every time SB3 records a metric (entropy, KL, value_loss, ep_rew_mean, ...)
-# it calls logger.dump() which calls write() on each KVWriter.
-# By adding our WandbWriter to that list, ALL SB3 metrics flow to WandB
-# automatically — no manual extraction needed.
-# ---------------------------------------------------------------------------
 class WandbWriter(KVWriter):
-    def write(
-        self,
-        key_values: Dict[str, Any],
-        key_excluded: Dict[str, str],
-        step: int = 0,
-    ) -> None:
-        # Only log scalar numerics; skip strings and excluded keys
+    """Plugs into SB3's logger so all training metrics stream to WandB."""
+    def write(self, key_values: Dict[str, Any], key_excluded: Dict[str, str], step: int = 0) -> None:
         loggable = {
             k: float(v)
             for k, v in key_values.items()
@@ -42,17 +31,27 @@ class WandbWriter(KVWriter):
     def close(self) -> None:
         pass
 
-class WandbCallback(BaseCallback):
+
+class EpisodeCallback(BaseCallback):
+    """Logs per-episode metrics: reward, length, success, target."""
     def _on_step(self) -> bool:
         for info in self.locals.get("infos", []):
             if "episode" in info:
                 wandb.log({
-                    "episode_reward": info["episode"]["r"],
-                    "episode_length": info["episode"]["l"],
-                    "success": float(info.get("success", 0)),
-                    "timestep": self.num_timesteps,
+                    "episode/reward":  info["episode"]["r"],
+                    "episode/length":  info["episode"]["l"],
+                    "episode/success": float(info.get("success", 0)),
+                    "timestep":        self.num_timesteps,
+                    **( {"episode/target": info["target"]} if "target" in info else {} ),
                 })
         return True
+
+
+def make_logger() -> Logger:
+    return Logger(
+        folder=None,
+        output_formats=[HumanOutputFormat(sys.stdout), WandbWriter()],
+    )
 
 
 def main(args):
@@ -60,11 +59,12 @@ def main(args):
         project="vla-rl-nav",
         name=args.run_name,
         config={
-            "algo": "PPO",
+            "algo":            "PPO",
+            "env":             args.env,
             "total_timesteps": args.timesteps,
-            "n_envs": args.n_envs,
-            "device": args.device,
-        }
+            "n_envs":          args.n_envs,
+            "device":          args.device,
+        },
     )
 
     def make_env():
@@ -78,16 +78,13 @@ def main(args):
     model = PPO(
         "MlpPolicy",
         env,
-        verbose=1,
-        tensorboard_log="./logs/",
+        verbose=0,
+        tensorboard_log=None,
         device=args.device,
     )
     model.set_logger(make_logger())
 
-    model.learn(
-        total_timesteps=args.timesteps,
-        callback=WandbCallback(),
-    )
+    model.learn(total_timesteps=args.timesteps, callback=EpisodeCallback())
 
     model.save(args.save_path)
     wandb.finish()
@@ -95,10 +92,12 @@ def main(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
+    parser.add_argument("--env",       type=str, default="MuJoCoNavEnv-v0",
+                        choices=["NavEnv-v0", "MuJoCoNavEnv-v0"])
     parser.add_argument("--timesteps", type=int, default=500_000)
-    parser.add_argument("--n-envs", type=int, default=8)
-    parser.add_argument("--device", type=str, default="cpu")
-    parser.add_argument("--run-name", type=str, default="ppo_baseline")
-    parser.add_argument("--save-path", type=str, default="ppo_nav_model")
+    parser.add_argument("--n-envs",    type=int, default=8)
+    parser.add_argument("--device",    type=str, default="cpu")
+    parser.add_argument("--run-name",  type=str, default="ppo_baseline")
+    parser.add_argument("--save-path", type=str, default="models/ppo_mujoco")
     args = parser.parse_args()
     main(args)
