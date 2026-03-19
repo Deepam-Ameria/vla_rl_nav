@@ -1,0 +1,149 @@
+<mujoco model="nav_arena">
+
+  <option timestep="0.05" gravity="0 0 -9.81"/>
+
+  <visual>
+    <headlight diffuse="0.7 0.65 0.6" ambient="0.4 0.38 0.35" specular="0.1 0.1 0.1"/>
+    <rgba haze="0.1 0.1 0.12 1"/>
+    <global azimuth="150" elevation="-30" offwidth="1280" offheight="720"/>
+    <quality shadowsize="2048"/>
+  </visual>
+
+  <asset>
+    <!-- Floor: warm wood-like checker -->
+    <texture name="wood" type="2d" builtin="checker" width="512" height="512"
+             rgb1="0.72 0.57 0.38" rgb2="0.65 0.50 0.32"/>
+    <material name="floor_mat" texture="wood" texrepeat="6 6" reflectance="0.05"/>
+
+    <!-- Walls: light warm plaster -->
+    <material name="wall_mat" rgba="0.92 0.90 0.85 1" reflectance="0.02"/>
+
+    <!-- Shared furniture materials -->
+    <material name="mat_table"  rgba="0.75 0.28 0.18 1" reflectance="0.1"/>
+    <material name="mat_legs"   rgba="0.35 0.22 0.12 1" reflectance="0.05"/>
+    <material name="mat_chair"  rgba="0.20 0.38 0.72 1" reflectance="0.1"/>
+    <material name="mat_fabric" rgba="0.25 0.45 0.80 1" reflectance="0.02"/>
+    <material name="mat_vase"   rgba="0.22 0.62 0.30 1" reflectance="0.25"/>
+    <material name="mat_tv"     rgba="0.12 0.12 0.14 1" reflectance="0.4"/>
+    <material name="mat_screen" rgba="0.25 0.55 0.90 1" reflectance="0.6"/>
+    <material name="mat_stand"  rgba="0.25 0.25 0.28 1" reflectance="0.2"/>
+
+    <!-- Floor glow rings under each target (visual only) -->
+    <material name="glow_red"    rgba="0.95 0.20 0.15 0.55" reflectance="0.0"/>
+    <material name="glow_blue"   rgba="0.20 0.40 0.95 0.55" reflectance="0.0"/>
+    <material name="glow_green"  rgba="0.20 0.80 0.30 0.55" reflectance="0.0"/>
+    <material name="glow_yellow" rgba="0.95 0.80 0.10 0.55" reflectance="0.0"/>
+  </asset>
+
+  <worldbody>
+
+    <!-- ── Lighting ──────────────────────────────────────────────── -->
+    <light name="sun" directional="true" pos="0 0 8" dir="0.2 -0.3 -1"
+           diffuse="0.8 0.75 0.65" specular="0.2 0.2 0.2" castshadow="true"/>
+    <light name="fill" directional="true" pos="0 0 5" dir="-0.2 0.3 -1"
+           diffuse="0.3 0.32 0.35" specular="0.0 0.0 0.0" castshadow="false"/>
+
+    <!-- ── Floor ─────────────────────────────────────────────────── -->
+    <geom name="floor" type="plane" size="6 6 0.1" material="floor_mat" condim="3"/>
+
+    <!-- ── Walls (no ceiling so top-down camera works) ───────────── -->
+    <geom name="wall_n" type="box" size="5.05 0.08 1.5" pos="0  5.08 1.5" material="wall_mat"/>
+    <geom name="wall_s" type="box" size="5.05 0.08 1.5" pos="0 -5.08 1.5" material="wall_mat"/>
+    <geom name="wall_e" type="box" size="0.08 5.05 1.5" pos=" 5.08 0 1.5" material="wall_mat"/>
+    <geom name="wall_w" type="box" size="0.08 5.05 1.5" pos="-5.08 0 1.5" material="wall_mat"/>
+
+    <!-- ── Target glow rings (floor-level, no collision) ─────────── -->
+    <geom name="glow_red"    type="cylinder" size="0.55 0.005" pos=" 2.5  2.5 0.005"
+          material="glow_red"    contype="0" conaffinity="0"/>
+    <geom name="glow_blue"   type="cylinder" size="0.55 0.005" pos="-2.5  2.5 0.005"
+          material="glow_blue"   contype="0" conaffinity="0"/>
+    <geom name="glow_green"  type="cylinder" size="0.55 0.005" pos=" 2.5 -2.5 0.005"
+          material="glow_green"  contype="0" conaffinity="0"/>
+    <geom name="glow_yellow" type="cylinder" size="0.55 0.005" pos="-2.5 -2.5 0.005"
+          material="glow_yellow" contype="0" conaffinity="0"/>
+
+    <!-- ══════════════════════════════════════════════════════════════
+         TARGET: RED → TABLE  (pos: 2.5, 2.5)
+         A dining table: flat top + 4 legs
+    ═══════════════════════════════════════════════════════════════ -->
+    <body name="target_red" pos="2.5 2.5 0">
+      <!-- tabletop -->
+      <geom name="table_top"  type="box" size="0.50 0.32 0.04" pos="0 0 0.76" material="mat_table"/>
+      <!-- 4 legs -->
+      <geom name="table_leg1" type="cylinder" size="0.04 0.36" pos=" 0.42  0.26 0.36" material="mat_legs"/>
+      <geom name="table_leg2" type="cylinder" size="0.04 0.36" pos="-0.42  0.26 0.36" material="mat_legs"/>
+      <geom name="table_leg3" type="cylinder" size="0.04 0.36" pos=" 0.42 -0.26 0.36" material="mat_legs"/>
+      <geom name="table_leg4" type="cylinder" size="0.04 0.36" pos="-0.42 -0.26 0.36" material="mat_legs"/>
+      <!-- small decorative item on top (mug) -->
+      <geom name="table_mug"  type="cylinder" size="0.055 0.065" pos="0.2 0.0 0.865" rgba="0.9 0.9 0.85 1"/>
+    </body>
+
+    <!-- ══════════════════════════════════════════════════════════════
+         TARGET: BLUE → CHAIR  (pos: -2.5, 2.5)
+         A chair: seat + backrest + 4 legs
+    ═══════════════════════════════════════════════════════════════ -->
+    <body name="target_blue" pos="-2.5 2.5 0">
+      <!-- seat -->
+      <geom name="chair_seat"  type="box" size="0.24 0.24 0.03" pos="0 0 0.46" material="mat_chair"/>
+      <!-- seat cushion -->
+      <geom name="chair_cush"  type="box" size="0.22 0.22 0.04" pos="0 0 0.51" material="mat_fabric"/>
+      <!-- backrest -->
+      <geom name="chair_back"  type="box" size="0.22 0.03 0.25" pos="0 -0.21 0.76" material="mat_chair"/>
+      <!-- 4 legs -->
+      <geom name="chair_leg1"  type="box" size="0.025 0.025 0.23" pos=" 0.19  0.19 0.23" material="mat_chair"/>
+      <geom name="chair_leg2"  type="box" size="0.025 0.025 0.23" pos="-0.19  0.19 0.23" material="mat_chair"/>
+      <geom name="chair_leg3"  type="box" size="0.025 0.025 0.23" pos=" 0.19 -0.19 0.23" material="mat_chair"/>
+      <geom name="chair_leg4"  type="box" size="0.025 0.025 0.23" pos="-0.19 -0.19 0.23" material="mat_chair"/>
+    </body>
+
+    <!-- ══════════════════════════════════════════════════════════════
+         TARGET: GREEN → VASE  (pos: 2.5, -2.5)
+         A decorative vase on a small pedestal
+    ═══════════════════════════════════════════════════════════════ -->
+    <body name="target_green" pos="2.5 -2.5 0">
+      <!-- pedestal -->
+      <geom name="vase_base"   type="cylinder" size="0.14 0.04"  pos="0 0 0.04"  rgba="0.55 0.45 0.35 1"/>
+      <!-- vase body (wide capsule) -->
+      <geom name="vase_body"   type="capsule"  size="0.11 0.22"  pos="0 0 0.40"  material="mat_vase"/>
+      <!-- vase neck -->
+      <geom name="vase_neck"   type="cylinder" size="0.055 0.09" pos="0 0 0.73"  material="mat_vase"/>
+      <!-- vase lip -->
+      <geom name="vase_lip"    type="cylinder" size="0.08 0.025" pos="0 0 0.845" material="mat_vase"/>
+    </body>
+
+    <!-- ══════════════════════════════════════════════════════════════
+         TARGET: YELLOW → TV  (pos: -2.5, -2.5)
+         A flat-screen TV on a stand, mounted against the wall corner
+    ═══════════════════════════════════════════════════════════════ -->
+    <body name="target_yellow" pos="-2.5 -2.5 0">
+      <!-- TV stand base -->
+      <geom name="tv_base"     type="box" size="0.28 0.14 0.03" pos="0 0 0.03"   material="mat_stand"/>
+      <!-- TV stand neck -->
+      <geom name="tv_neck"     type="box" size="0.05 0.05 0.28" pos="0 0 0.34"   material="mat_stand"/>
+      <!-- TV body (bezel) -->
+      <geom name="tv_bezel"    type="box" size="0.46 0.04 0.28" pos="0 0 0.90"   material="mat_tv"/>
+      <!-- TV screen (slightly in front, emissive blue) -->
+      <geom name="tv_screen"   type="box" size="0.42 0.035 0.24" pos="0 -0.008 0.90" material="mat_screen"/>
+    </body>
+
+    <!-- ── Robot ─────────────────────────────────────────────────── -->
+    <body name="robot" pos="0 0 0.12">
+      <freejoint name="robot_joint"/>
+      <!-- main body: white disc -->
+      <geom name="robot_body" type="cylinder" size="0.16 0.07"
+            rgba="0.95 0.95 0.95 1" mass="1.0"/>
+      <!-- direction nose: orange nub -->
+      <geom name="robot_nose" type="box" size="0.07 0.035 0.035" pos="0.16 0 0.04"
+            rgba="1.0 0.45 0.0 1" contype="0" conaffinity="0"/>
+      <!-- top bump (like a Roomba sensor dome) -->
+      <geom name="robot_dome" type="sphere" size="0.06" pos="0 0 0.07"
+            rgba="0.3 0.3 0.35 1" contype="0" conaffinity="0"/>
+    </body>
+
+    <!-- ── Cameras ───────────────────────────────────────────────── -->
+    <camera name="top_down" pos="0 0 13" euler="0 0 0"/>
+    <camera name="iso"      pos="9 -9 9" xyaxes="1 0 0 0 0.7 0.7"/>
+
+  </worldbody>
+
+</mujoco>
